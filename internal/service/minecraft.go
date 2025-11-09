@@ -218,3 +218,34 @@ func (s *MinecraftServerService) GetServerLogs(ctx context.Context, containerID 
 
 	return logs, nil
 }
+
+// ExecuteCommand executes a Minecraft command via rcon-cli in the container
+func (s *MinecraftServerService) ExecuteCommand(ctx context.Context, containerID string, command string) (string, error) {
+	// Create exec configuration to run rcon-cli
+	execConfig := container.ExecOptions{
+		Cmd:          []string{"rcon-cli", command},
+		AttachStdout: true,
+		AttachStderr: true,
+	}
+
+	// Create the exec instance
+	execResp, err := s.dockerService.client.ContainerExecCreate(ctx, containerID, execConfig)
+	if err != nil {
+		return "", fmt.Errorf("failed to create exec: %w", err)
+	}
+
+	// Attach to the exec instance
+	attachResp, err := s.dockerService.client.ContainerExecAttach(ctx, execResp.ID, container.ExecStartOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to attach to exec: %w", err)
+	}
+	defer attachResp.Close()
+
+	// Read the output
+	output, err := io.ReadAll(attachResp.Reader)
+	if err != nil {
+		return "", fmt.Errorf("failed to read exec output: %w", err)
+	}
+
+	return string(output), nil
+}
