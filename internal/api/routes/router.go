@@ -1,8 +1,10 @@
 package routes
 
 import (
+	"bufio"
 	"encoding/json"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -20,6 +22,7 @@ func NewRouter(mcService *service.MinecraftServerService, logger *slog.Logger) h
 
 	// Initialize handlers
 	serverHandler := handlers.NewServerHandler(mcService, logger)
+	logsHandler := handlers.NewLogsHandler(mcService, logger)
 
 	// Server management endpoints
 	mux.HandleFunc("POST /api/v1/servers", serverHandler.CreateServer)
@@ -28,6 +31,9 @@ func NewRouter(mcService *service.MinecraftServerService, logger *slog.Logger) h
 	mux.HandleFunc("DELETE /api/v1/servers/{id}", serverHandler.DeleteServer)
 	mux.HandleFunc("POST /api/v1/servers/{id}/start", serverHandler.StartServer)
 	mux.HandleFunc("POST /api/v1/servers/{id}/stop", serverHandler.StopServer)
+
+	// WebSocket endpoints
+	mux.HandleFunc("GET /api/v1/servers/{id}/logs", logsHandler.StreamLogs)
 
 	// API Documentation endpoints
 	mux.HandleFunc("GET /api/openapi.yaml", handlers.ServeOpenAPISpec)
@@ -79,6 +85,15 @@ type responseWriter struct {
 func (rw *responseWriter) WriteHeader(code int) {
 	rw.statusCode = code
 	rw.ResponseWriter.WriteHeader(code)
+}
+
+// Hijack implements http.Hijacker interface for WebSocket support
+func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := rw.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, http.ErrNotSupported
+	}
+	return h.Hijack()
 }
 
 // corsMiddleware adds CORS headers

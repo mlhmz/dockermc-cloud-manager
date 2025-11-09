@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/volume"
@@ -198,4 +199,22 @@ func (s *MinecraftServerService) DeleteServer(ctx context.Context, id string) er
 
 	// Remove from database
 	return s.repo.Delete(id)
+}
+
+// GetServerLogs retrieves logs from a server's Docker container
+func (s *MinecraftServerService) GetServerLogs(ctx context.Context, containerID string, follow bool, tail string) (io.ReadCloser, error) {
+	options := container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Follow:     follow,
+		Tail:       tail,
+		Timestamps: false,
+	}
+
+	logs, err := s.dockerService.client.ContainerLogs(ctx, containerID, options)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get container logs: %w", err)
+	}
+
+	return logs, nil
 }

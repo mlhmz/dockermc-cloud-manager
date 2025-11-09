@@ -205,6 +205,63 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /api/v1/servers/{id}/logs:
+    get:
+      tags:
+        - servers
+      summary: Stream server logs via WebSocket
+      description: |
+        Establishes a WebSocket connection to stream real-time logs from a Minecraft server.
+
+        This endpoint upgrades the HTTP connection to a WebSocket protocol and streams
+        container logs in real-time. The connection remains open until the client disconnects
+        or the server stops.
+
+        **WebSocket URL:** `ws://localhost:8080/api/v1/servers/{id}/logs`
+
+        **Query Parameters:**
+        - `follow` (boolean): Continue streaming new logs (default: true)
+        - `tail` (string): Number of lines from the end of logs (default: "100")
+      operationId: streamServerLogs
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Server ID
+          schema:
+            type: string
+            format: uuid
+        - name: follow
+          in: query
+          required: false
+          description: Continue streaming new logs
+          schema:
+            type: boolean
+            default: true
+        - name: tail
+          in: query
+          required: false
+          description: Number of lines from the end of logs
+          schema:
+            type: string
+            default: "100"
+            example: "100"
+      responses:
+        "101":
+          description: Switching Protocols - WebSocket connection established
+        "404":
+          description: Server not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /api/v1/servers/{id}/stop:
     post:
       tags:
