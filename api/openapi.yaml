@@ -4,8 +4,16 @@ info:
   description: |
     REST API for managing Minecraft servers running in Docker containers.
 
-    This API provides endpoints to create, manage, and monitor Minecraft servers
-    with persistent storage, connected through a centralized Velocity proxy.
+    ## Features
+    - **Automatic Proxy Management**: All servers are automatically connected to a centralized Velocity proxy
+    - **Secure Forwarding**: Velocity-Paper communication secured with auto-generated forwarding secrets
+    - **Docker Network Integration**: Servers communicate via Docker's internal network
+    - **Real-time Logs**: WebSocket-based log streaming with command execution
+    - **Persistent Storage**: Each server has its own Docker volume for world data
+
+    ## Architecture
+    Players connect to the Velocity proxy (port 25565), which routes them to backend Paper servers.
+    All servers are automatically linked when created, and the proxy configuration is dynamically updated.
   version: 1.0.0
   contact:
     name: API Support
@@ -25,6 +33,8 @@ tags:
     description: Health check endpoints
   - name: servers
     description: Minecraft server management
+  - name: proxy
+    description: Velocity proxy management
 
 paths:
   /health:
@@ -301,6 +311,108 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /api/v1/proxy:
+    get:
+      tags:
+        - proxy
+      summary: Get proxy status
+      description: Returns the status and details of the Velocity proxy server
+      operationId: getProxy
+      responses:
+        "200":
+          description: Proxy details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProxyServer"
+        "404":
+          description: Proxy not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/proxy/start:
+    post:
+      tags:
+        - proxy
+      summary: Start the proxy
+      description: |
+        Starts the Velocity proxy server. If the proxy doesn't exist, it will be created automatically.
+        This ensures there's always exactly one proxy in the system.
+      operationId: startProxy
+      responses:
+        "200":
+          description: Proxy started successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProxyServer"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/proxy/stop:
+    post:
+      tags:
+        - proxy
+      summary: Stop the proxy
+      description: Gracefully stops the Velocity proxy server
+      operationId: stopProxy
+      responses:
+        "200":
+          description: Proxy stopped successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Proxy stopped successfully"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/proxy/regenerate-config:
+    post:
+      tags:
+        - proxy
+      summary: Regenerate proxy configuration
+      description: |
+        Regenerates the Velocity proxy configuration file based on all currently registered servers.
+        This updates the server list and forwarding settings.
+      operationId: regenerateProxyConfig
+      responses:
+        "200":
+          description: Configuration regenerated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Configuration regenerated successfully"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 components:
   schemas:
     MinecraftServer:
@@ -410,6 +522,58 @@ components:
           description: Message of the day
           maxLength: 255
           example: "Updated MOTD"
+
+    ProxyServer:
+      type: object
+      required:
+        - id
+        - name
+        - container_id
+        - volume_id
+        - status
+        - port
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          description: Proxy identifier (always "main-proxy")
+          example: "main-proxy"
+        name:
+          type: string
+          description: Proxy name
+          example: "Main Proxy"
+        container_id:
+          type: string
+          description: Docker container ID
+          example: "a1b2c3d4e5f6"
+        volume_id:
+          type: string
+          description: Docker volume ID
+          example: "mc-proxy-main"
+        status:
+          type: string
+          enum:
+            - creating
+            - running
+            - stopped
+            - error
+          description: Current proxy status
+          example: "running"
+        port:
+          type: integer
+          description: Public port for player connections
+          example: 25565
+        created_at:
+          type: string
+          format: date-time
+          description: Proxy creation timestamp
+          example: "2025-11-09T13:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2025-11-09T14:30:00Z"
 
     Error:
       type: object

@@ -40,7 +40,7 @@ func New(dbPath string, log *slog.Logger) (*DB, error) {
 	log.Info("Database connection established", "path", dbPath)
 
 	// Auto-migrate schemas
-	if err := db.AutoMigrate(&models.MinecraftServer{}); err != nil {
+	if err := db.AutoMigrate(&models.MinecraftServer{}, &models.ProxyServer{}); err != nil {
 		return nil, fmt.Errorf("failed to auto-migrate schemas: %w", err)
 	}
 

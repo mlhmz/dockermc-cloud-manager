@@ -14,7 +14,7 @@ import (
 )
 
 // NewRouter creates and configures the HTTP router
-func NewRouter(mcService *service.MinecraftServerService, logger *slog.Logger) http.Handler {
+func NewRouter(mcService *service.MinecraftServerService, proxyService *service.ProxyService, logger *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
 
 	// Health check endpoint
@@ -23,6 +23,7 @@ func NewRouter(mcService *service.MinecraftServerService, logger *slog.Logger) h
 	// Initialize handlers
 	serverHandler := handlers.NewServerHandler(mcService, logger)
 	logsHandler := handlers.NewLogsHandler(mcService, logger)
+	proxyHandler := handlers.NewProxyHandler(proxyService, logger)
 
 	// Server management endpoints
 	mux.HandleFunc("POST /api/v1/servers", serverHandler.CreateServer)
@@ -34,6 +35,12 @@ func NewRouter(mcService *service.MinecraftServerService, logger *slog.Logger) h
 
 	// WebSocket endpoints
 	mux.HandleFunc("GET /api/v1/servers/{id}/logs", logsHandler.StreamLogs)
+
+	// Proxy management endpoints
+	mux.HandleFunc("GET /api/v1/proxy", proxyHandler.GetProxy)
+	mux.HandleFunc("POST /api/v1/proxy/start", proxyHandler.StartProxy)
+	mux.HandleFunc("POST /api/v1/proxy/stop", proxyHandler.StopProxy)
+	mux.HandleFunc("POST /api/v1/proxy/regenerate-config", proxyHandler.RegenerateConfig)
 
 	// API Documentation endpoints
 	mux.HandleFunc("GET /api/openapi.yaml", handlers.ServeOpenAPISpec)
