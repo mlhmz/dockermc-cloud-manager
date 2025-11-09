@@ -1,0 +1,11 @@
+meta {
+  name: List all servers
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/servers
+  body: none
+  auth: inherit
+}

@@ -1,0 +1,20 @@
+meta {
+  name: Stream server logs via WebSocket
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/servers/:id/logs
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~follow: 
+  ~tail: 
+}
+
+params:path {
+  id: 
+}

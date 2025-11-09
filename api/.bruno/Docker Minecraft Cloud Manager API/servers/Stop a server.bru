@@ -1,0 +1,15 @@
+meta {
+  name: Stop a server
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/servers/:id/stop
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}

@@ -1,0 +1,19 @@
+meta {
+  name: Stream server log
+  type: ws
+  seq: 8
+}
+
+ws {
+  url: ws://localhost:8080/api/v1/servers/51116a3b-4d18-4a59-b509-ac6ad4cd7788/logs
+  body: ws
+  auth: none
+}
+
+body:ws {
+  name: message 1
+  type: json
+  content: '''
+    {}
+  '''
+}
