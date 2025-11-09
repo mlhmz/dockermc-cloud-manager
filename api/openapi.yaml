@@ -1,0 +1,365 @@
+openapi: 3.0.3
+info:
+  title: Docker Minecraft Cloud Manager API
+  description: |
+    REST API for managing Minecraft servers running in Docker containers.
+
+    This API provides endpoints to create, manage, and monitor Minecraft servers
+    with persistent storage, connected through a centralized Velocity proxy.
+  version: 1.0.0
+  contact:
+    name: API Support
+    url: https://github.com/mlhmz/dockermc-cloud-manager
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.example.com
+    description: Production server
+
+tags:
+  - name: health
+    description: Health check endpoints
+  - name: servers
+    description: Minecraft server management
+
+paths:
+  /health:
+    get:
+      tags:
+        - health
+      summary: Health check
+      description: Returns the health status of the API
+      operationId: healthCheck
+      responses:
+        "200":
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+
+  /api/v1/servers:
+    get:
+      tags:
+        - servers
+      summary: List all servers
+      description: Returns a list of all Minecraft servers
+      operationId: listServers
+      responses:
+        "200":
+          description: List of servers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MinecraftServer"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    post:
+      tags:
+        - servers
+      summary: Create a new server
+      description: Creates a new Minecraft server with a Docker container and persistent volume
+      operationId: createServer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServerRequest"
+      responses:
+        "201":
+          description: Server created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MinecraftServer"
+        "400":
+          description: Bad request - invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/servers/{id}:
+    get:
+      tags:
+        - servers
+      summary: Get server by ID
+      description: Returns details of a specific Minecraft server
+      operationId: getServer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Server ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Server details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MinecraftServer"
+        "404":
+          description: Server not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      tags:
+        - servers
+      summary: Delete a server
+      description: Stops and removes a Minecraft server, including its container and volume
+      operationId: deleteServer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Server ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Server deleted successfully
+        "404":
+          description: Server not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/servers/{id}/start:
+    post:
+      tags:
+        - servers
+      summary: Start a server
+      description: Starts a stopped Minecraft server
+      operationId: startServer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Server ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Server started successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: started
+        "404":
+          description: Server not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/servers/{id}/stop:
+    post:
+      tags:
+        - servers
+      summary: Stop a server
+      description: Gracefully stops a running Minecraft server
+      operationId: stopServer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Server ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Server stopped successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: stopped
+        "404":
+          description: Server not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  schemas:
+    MinecraftServer:
+      type: object
+      required:
+        - id
+        - name
+        - container_id
+        - volume_id
+        - status
+        - max_players
+        - motd
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique server identifier
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          description: Server name
+          example: "survival-server"
+        container_id:
+          type: string
+          description: Docker container ID
+          example: "a1b2c3d4e5f6"
+        volume_id:
+          type: string
+          description: Docker volume ID
+          example: "mc-server-550e8400-e29b-41d4-a716-446655440000"
+        status:
+          type: string
+          enum:
+            - creating
+            - running
+            - stopped
+            - error
+          description: Current server status
+          example: "running"
+        port:
+          type: integer
+          description: Server port (optional)
+          example: 25565
+        max_players:
+          type: integer
+          description: Maximum number of players
+          minimum: 1
+          maximum: 1000
+          example: 20
+        motd:
+          type: string
+          description: Message of the day
+          example: "Welcome to my Minecraft server!"
+        created_at:
+          type: string
+          format: date-time
+          description: Server creation timestamp
+          example: "2025-11-09T13:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2025-11-09T14:30:00Z"
+
+    CreateServerRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Server name (must be unique)
+          minLength: 1
+          maxLength: 100
+          example: "survival-server"
+        max_players:
+          type: integer
+          description: Maximum number of players (default 20)
+          minimum: 1
+          maximum: 1000
+          default: 20
+          example: 20
+        motd:
+          type: string
+          description: Message of the day (default generated from name)
+          maxLength: 255
+          example: "Welcome to my server!"
+        version:
+          type: string
+          description: Minecraft version (default LATEST)
+          default: "LATEST"
+          example: "1.20.1"
+
+    UpdateServerRequest:
+      type: object
+      properties:
+        max_players:
+          type: integer
+          description: Maximum number of players
+          minimum: 1
+          maximum: 1000
+          example: 50
+        motd:
+          type: string
+          description: Message of the day
+          maxLength: 255
+          example: "Updated MOTD"
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: "Server not found"

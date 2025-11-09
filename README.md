@@ -65,9 +65,58 @@ cd dockermc-cloud-manager
 go build
 ```
 
-### Usage
+### Running the API
 
-*Coming soon - This section will be updated as the API is developed*
+```bash
+# Copy environment template
+cp .env.example .env
+
+# Build the API
+go build -o bin/api ./cmd/api
+
+# Run the API
+./bin/api
+```
+
+The API server will start on `http://localhost:8080` by default.
+
+## API Documentation
+
+The REST API is documented using OpenAPI 3.0 specification. You can find the complete API documentation in `api/openapi.yaml`.
+
+### Available Endpoints
+
+- `GET /health` - Health check
+- `POST /api/v1/servers` - Create a new Minecraft server
+- `GET /api/v1/servers` - List all servers
+- `GET /api/v1/servers/{id}` - Get server details
+- `DELETE /api/v1/servers/{id}` - Delete a server
+- `POST /api/v1/servers/{id}/start` - Start a server
+- `POST /api/v1/servers/{id}/stop` - Stop a server
+
+### Example: Create a Server
+
+```bash
+curl -X POST http://localhost:8080/api/v1/servers \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "survival-server",
+    "max_players": 20,
+    "motd": "Welcome to my server!",
+    "version": "1.20.1"
+  }'
+```
+
+### Viewing the API Documentation
+
+**Interactive Swagger UI** (Built-in):
+Once the API is running, visit `http://localhost:8080/swagger/` to view and interact with the API documentation through Swagger UI.
+
+**Other Options**:
+- **OpenAPI Spec**: `http://localhost:8080/api/openapi.yaml` - Raw YAML specification
+- [Swagger Editor](https://editor.swagger.io/) - Paste the contents of `api/openapi.yaml`
+- [Redoc](https://redocly.github.io/redoc/) - For a cleaner documentation view
+- [Postman](https://www.postman.com/) - Import the OpenAPI spec for testing
 
 ## Development
 
