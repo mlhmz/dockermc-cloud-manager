@@ -11,6 +11,7 @@ type Config struct {
 	DockerNetwork  string
 	VelocityImage  string
 	MinecraftImage string
+	DatabasePath   string
 }
 
 // Load reads configuration from environment variables with defaults
@@ -37,10 +38,16 @@ func Load() (*Config, error) {
 		minecraftImage = "itzg/minecraft-server:latest"
 	}
 
+	databasePath := os.Getenv("DATABASE_PATH")
+	if databasePath == "" {
+		databasePath = "./data/dockermc.db"
+	}
+
 	return &Config{
 		Port:           port,
 		DockerNetwork:  dockerNetwork,
 		VelocityImage:  velocityImage,
 		MinecraftImage: minecraftImage,
+		DatabasePath:   databasePath,
 	}, nil
 }

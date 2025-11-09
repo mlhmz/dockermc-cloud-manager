@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/mlhmz/dockermc-cloud-manager/internal/models"
@@ -11,12 +12,14 @@ import (
 // ServerHandler handles HTTP requests for server management
 type ServerHandler struct {
 	mcService *service.MinecraftServerService
+	logger    *slog.Logger
 }
 
 // NewServerHandler creates a new ServerHandler
-func NewServerHandler(mcService *service.MinecraftServerService) *ServerHandler {
+func NewServerHandler(mcService *service.MinecraftServerService, logger *slog.Logger) *ServerHandler {
 	return &ServerHandler{
 		mcService: mcService,
+		logger:    logger,
 	}
 }
 
@@ -24,16 +27,21 @@ func NewServerHandler(mcService *service.MinecraftServerService) *ServerHandler 
 func (h *ServerHandler) CreateServer(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateServerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.WarnContext(r.Context(), "Invalid request body for server creation", "error", err)
 		respondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
+	h.logger.InfoContext(r.Context(), "Creating new server", "name", req.Name)
+
 	server, err := h.mcService.CreateServer(r.Context(), &req)
 	if err != nil {
+		h.logger.ErrorContext(r.Context(), "Failed to create server", "name", req.Name, "error", err)
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
+	h.logger.InfoContext(r.Context(), "Server created successfully", "id", server.ID, "name", server.Name)
 	respondJSON(w, http.StatusCreated, server)
 }
 
@@ -73,11 +81,15 @@ func (h *ServerHandler) DeleteServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.logger.InfoContext(r.Context(), "Deleting server", "id", id)
+
 	if err := h.mcService.DeleteServer(r.Context(), id); err != nil {
+		h.logger.ErrorContext(r.Context(), "Failed to delete server", "id", id, "error", err)
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
+	h.logger.InfoContext(r.Context(), "Server deleted successfully", "id", id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -89,11 +101,15 @@ func (h *ServerHandler) StartServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.logger.InfoContext(r.Context(), "Starting server", "id", id)
+
 	if err := h.mcService.StartServer(r.Context(), id); err != nil {
+		h.logger.ErrorContext(r.Context(), "Failed to start server", "id", id, "error", err)
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
+	h.logger.InfoContext(r.Context(), "Server started successfully", "id", id)
 	respondJSON(w, http.StatusOK, map[string]string{"status": "started"})
 }
 
@@ -105,11 +121,15 @@ func (h *ServerHandler) StopServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.logger.InfoContext(r.Context(), "Stopping server", "id", id)
+
 	if err := h.mcService.StopServer(r.Context(), id); err != nil {
+		h.logger.ErrorContext(r.Context(), "Failed to stop server", "id", id, "error", err)
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
+	h.logger.InfoContext(r.Context(), "Server stopped successfully", "id", id)
 	respondJSON(w, http.StatusOK, map[string]string{"status": "stopped"})
 }
 

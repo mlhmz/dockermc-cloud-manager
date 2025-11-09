@@ -2,7 +2,9 @@ package routes
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/mlhmz/dockermc-cloud-manager/internal/api/handlers"
 	"github.com/mlhmz/dockermc-cloud-manager/internal/service"
@@ -10,14 +12,14 @@ import (
 )
 
 // NewRouter creates and configures the HTTP router
-func NewRouter(mcService *service.MinecraftServerService) http.Handler {
+func NewRouter(mcService *service.MinecraftServerService, logger *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
 
 	// Health check endpoint
 	mux.HandleFunc("/health", healthCheckHandler)
 
 	// Initialize handlers
-	serverHandler := handlers.NewServerHandler(mcService)
+	serverHandler := handlers.NewServerHandler(mcService, logger)
 
 	// Server management endpoints
 	mux.HandleFunc("POST /api/v1/servers", serverHandler.CreateServer)
@@ -34,7 +36,7 @@ func NewRouter(mcService *service.MinecraftServerService) http.Handler {
 	))
 
 	// Apply middleware
-	return loggingMiddleware(corsMiddleware(mux))
+	return loggingMiddleware(logger, corsMiddleware(mux))
 }
 
 // healthCheckHandler returns the health status of the API
@@ -45,13 +47,38 @@ func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// loggingMiddleware logs HTTP requests
-func loggingMiddleware(next http.Handler) http.Handler {
+// loggingMiddleware logs HTTP requests with structured logging
+func loggingMiddleware(logger *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Replace with proper logger
-		println(r.Method, r.URL.Path)
-		next.ServeHTTP(w, r)
+		start := time.Now()
+
+		// Wrap response writer to capture status code
+		wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+
+		next.ServeHTTP(wrapped, r)
+
+		duration := time.Since(start)
+
+		logger.InfoContext(r.Context(),
+			"HTTP request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", wrapped.statusCode,
+			"duration_ms", duration.Milliseconds(),
+			"remote_addr", r.RemoteAddr,
+		)
 	})
+}
+
+// responseWriter wraps http.ResponseWriter to capture status code
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
 }
 
 // corsMiddleware adds CORS headers

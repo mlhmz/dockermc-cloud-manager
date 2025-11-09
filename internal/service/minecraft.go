@@ -3,35 +3,30 @@ package service
 import (
 	"context"
 	"fmt"
-	"sync"
-	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/google/uuid"
+	"github.com/mlhmz/dockermc-cloud-manager/internal/database"
 	"github.com/mlhmz/dockermc-cloud-manager/internal/models"
 )
 
 // MinecraftServerService manages Minecraft server lifecycle
 type MinecraftServerService struct {
 	dockerService *DockerService
-	servers       map[string]*models.MinecraftServer
-	mu            sync.RWMutex
+	repo          *database.ServerRepository
 }
 
 // NewMinecraftServerService creates a new Minecraft server service
-func NewMinecraftServerService(dockerService *DockerService) *MinecraftServerService {
+func NewMinecraftServerService(dockerService *DockerService, repo *database.ServerRepository) *MinecraftServerService {
 	return &MinecraftServerService{
 		dockerService: dockerService,
-		servers:       make(map[string]*models.MinecraftServer),
+		repo:          repo,
 	}
 }
 
 // CreateServer creates a new Minecraft server
 func (s *MinecraftServerService) CreateServer(ctx context.Context, req *models.CreateServerRequest) (*models.MinecraftServer, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	// Generate unique ID
 	serverID := uuid.New().String()
 
@@ -120,50 +115,34 @@ func (s *MinecraftServerService) CreateServer(ctx context.Context, req *models.C
 		Status:      models.StatusCreating,
 		MaxPlayers:  maxPlayers,
 		MOTD:        motd,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
 	}
 
-	// Store server
-	s.servers[serverID] = server
+	// Save to database
+	if err := s.repo.Create(server); err != nil {
+		// Cleanup container and volume on failure
+		s.dockerService.client.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
+		s.dockerService.client.VolumeRemove(ctx, vol.Name, true)
+		return nil, fmt.Errorf("failed to save server to database: %w", err)
+	}
 
 	return server, nil
 }
 
 // ListServers returns all servers
 func (s *MinecraftServerService) ListServers(ctx context.Context) ([]*models.MinecraftServer, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	servers := make([]*models.MinecraftServer, 0, len(s.servers))
-	for _, server := range s.servers {
-		servers = append(servers, server)
-	}
-
-	return servers, nil
+	return s.repo.FindAll()
 }
 
 // GetServer returns a specific server by ID
 func (s *MinecraftServerService) GetServer(ctx context.Context, id string) (*models.MinecraftServer, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	server, exists := s.servers[id]
-	if !exists {
-		return nil, fmt.Errorf("server not found")
-	}
-
-	return server, nil
+	return s.repo.FindByID(id)
 }
 
 // StartServer starts a Minecraft server
 func (s *MinecraftServerService) StartServer(ctx context.Context, id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	server, exists := s.servers[id]
-	if !exists {
-		return fmt.Errorf("server not found")
+	server, err := s.repo.FindByID(id)
+	if err != nil {
+		return err
 	}
 
 	if err := s.dockerService.client.ContainerStart(ctx, server.ContainerID, container.StartOptions{}); err != nil {
@@ -171,19 +150,14 @@ func (s *MinecraftServerService) StartServer(ctx context.Context, id string) err
 	}
 
 	server.Status = models.StatusRunning
-	server.UpdatedAt = time.Now()
-
-	return nil
+	return s.repo.Update(server)
 }
 
 // StopServer stops a Minecraft server
 func (s *MinecraftServerService) StopServer(ctx context.Context, id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	server, exists := s.servers[id]
-	if !exists {
-		return fmt.Errorf("server not found")
+	server, err := s.repo.FindByID(id)
+	if err != nil {
+		return err
 	}
 
 	timeout := 30
@@ -194,19 +168,14 @@ func (s *MinecraftServerService) StopServer(ctx context.Context, id string) erro
 	}
 
 	server.Status = models.StatusStopped
-	server.UpdatedAt = time.Now()
-
-	return nil
+	return s.repo.Update(server)
 }
 
 // DeleteServer removes a Minecraft server and its resources
 func (s *MinecraftServerService) DeleteServer(ctx context.Context, id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	server, exists := s.servers[id]
-	if !exists {
-		return fmt.Errorf("server not found")
+	server, err := s.repo.FindByID(id)
+	if err != nil {
+		return err
 	}
 
 	// Stop container if running
@@ -227,8 +196,6 @@ func (s *MinecraftServerService) DeleteServer(ctx context.Context, id string) er
 		return fmt.Errorf("failed to remove volume: %w", err)
 	}
 
-	// Remove from map
-	delete(s.servers, id)
-
-	return nil
+	// Remove from database
+	return s.repo.Delete(id)
 }

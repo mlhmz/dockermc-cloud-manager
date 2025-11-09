@@ -39,3 +39,9 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+
+# Database files
+data/
+*.db
+*.db-shm
+*.db-wal

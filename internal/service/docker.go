@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
@@ -13,10 +13,11 @@ import (
 // DockerService handles Docker operations
 type DockerService struct {
 	client *client.Client
+	logger *slog.Logger
 }
 
 // NewDockerService creates a new Docker service
-func NewDockerService() (*DockerService, error) {
+func NewDockerService(logger *slog.Logger) (*DockerService, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, err
@@ -24,6 +25,7 @@ func NewDockerService() (*DockerService, error) {
 
 	return &DockerService{
 		client: cli,
+		logger: logger,
 	}, nil
 }
 
@@ -49,14 +51,15 @@ func (s *DockerService) PullImage(ctx context.Context, imageName string) error {
 	_, _, err := s.client.ImageInspectWithRaw(ctx, imageName)
 	if err == nil {
 		// Image already exists
-		log.Printf("Image %s already exists locally", imageName)
+		s.logger.InfoContext(ctx, "Image already exists locally", "image", imageName)
 		return nil
 	}
 
 	// Image doesn't exist, pull it
-	log.Printf("Pulling image %s...", imageName)
+	s.logger.InfoContext(ctx, "Pulling Docker image", "image", imageName)
 	reader, err := s.client.ImagePull(ctx, imageName, image.PullOptions{})
 	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to pull image", "image", imageName, "error", err)
 		return fmt.Errorf("failed to pull image %s: %w", imageName, err)
 	}
 	defer reader.Close()
@@ -65,9 +68,10 @@ func (s *DockerService) PullImage(ctx context.Context, imageName string) error {
 	// This is necessary because ImagePull is asynchronous
 	_, err = io.Copy(io.Discard, reader)
 	if err != nil {
+		s.logger.ErrorContext(ctx, "Error reading image pull output", "image", imageName, "error", err)
 		return fmt.Errorf("error reading image pull output: %w", err)
 	}
 
-	log.Printf("Successfully pulled image %s", imageName)
+	s.logger.InfoContext(ctx, "Successfully pulled image", "image", imageName)
 	return nil
 }
