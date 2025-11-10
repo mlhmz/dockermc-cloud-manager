@@ -171,7 +171,7 @@ func (s *ProxyService) createProxy(ctx context.Context) (*models.ProxyServer, er
 		Name:        "Main Proxy",
 		ContainerID: resp.ID,
 		VolumeID:    vol.Name,
-		Status:      models.ProxyStatusCreating,
+		Status:      models.StatusCreating,
 		Port:        DefaultProxyPort,
 	}
 
@@ -233,7 +233,7 @@ func (s *ProxyService) StartProxy(ctx context.Context) error {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 
-	proxy.Status = models.ProxyStatusRunning
+	proxy.Status = models.StatusRunning
 	if err := s.proxyRepo.Update(proxy); err != nil {
 		s.logger.ErrorContext(ctx, "Failed to update proxy status", "proxy_id", proxy.ID, "error", err)
 		return err
@@ -261,7 +261,7 @@ func (s *ProxyService) StopProxy(ctx context.Context) error {
 		return fmt.Errorf("failed to stop container: %w", err)
 	}
 
-	proxy.Status = models.ProxyStatusStopped
+	proxy.Status = models.StatusStopped
 	if err := s.proxyRepo.Update(proxy); err != nil {
 		s.logger.ErrorContext(ctx, "Failed to update proxy status", "proxy_id", proxy.ID, "error", err)
 		return err
@@ -283,24 +283,24 @@ func (s *ProxyService) syncProxyState(ctx context.Context, proxy *models.ProxySe
 	}
 
 	// Determine the new status based on container state
-	var newStatus models.ProxyStatus
+	var newStatus models.ContainerStatus
 	if !state.Exists {
 		// Container doesn't exist anymore (deleted manually or crashed)
 		s.logger.WarnContext(ctx, "Proxy container no longer exists in Docker, marking as stopped",
 			"proxy_id", proxy.ID,
 			"previous_status", proxy.Status,
 			"container_id", proxy.ContainerID)
-		newStatus = models.ProxyStatusStopped
+		newStatus = models.StatusStopped
 		proxy.ContainerID = "" // Clear the container ID
 	} else if state.Running {
-		newStatus = models.ProxyStatusRunning
+		newStatus = models.StatusRunning
 	} else if state.Restarting {
-		newStatus = models.ProxyStatusCreating
+		newStatus = models.StatusCreating
 	} else if state.Dead || state.OOMKilled {
-		newStatus = models.ProxyStatusError
+		newStatus = models.StatusError
 	} else {
 		// Stopped, paused, or exited
-		newStatus = models.ProxyStatusStopped
+		newStatus = models.StatusStopped
 	}
 
 	// Update database if status changed

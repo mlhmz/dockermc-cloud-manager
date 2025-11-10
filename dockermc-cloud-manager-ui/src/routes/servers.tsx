@@ -9,7 +9,7 @@ import { useStartServer } from '@/hooks/mutations/useStartServer';
 import { useStopServer } from '@/hooks/mutations/useStopServer';
 import { useDeleteServer } from '@/hooks/mutations/useDeleteServer';
 import { CreateServerDialog } from '@/components/create-server-dialog';
-import type { MinecraftServer } from '@/types/api';
+import type { MinecraftServer } from '@/types/minecraft-server';
 
 function getStatusColor(status: MinecraftServer['status']) {
   switch (status) {

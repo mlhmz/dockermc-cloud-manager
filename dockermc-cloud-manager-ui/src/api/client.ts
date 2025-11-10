@@ -1,10 +1,11 @@
 import type {
   MinecraftServer,
   CreateServerRequest,
+} from '../types/minecraft-server';
+import type {
   ProxyServer,
   UpdateProxyRequest,
-  HealthResponse,
-} from '../types/api';
+} from '../types/proxy';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
@@ -28,11 +29,6 @@ class ApiClient {
     }
 
     return response.json();
-  }
-
-  // Health
-  async getHealth(): Promise<HealthResponse> {
-    return this.fetchJson<HealthResponse>('/health');
   }
 
   // Servers

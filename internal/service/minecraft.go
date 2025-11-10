@@ -327,7 +327,7 @@ func (s *MinecraftServerService) syncServerState(ctx context.Context, server *mo
 	}
 
 	// Determine the new status based on container state
-	var newStatus models.ServerStatus
+	var newStatus models.ContainerStatus
 	if !state.Exists {
 		// Container doesn't exist anymore (deleted manually or crashed)
 		s.logger.WarnContext(ctx, "Container no longer exists in Docker, marking server as stopped",
