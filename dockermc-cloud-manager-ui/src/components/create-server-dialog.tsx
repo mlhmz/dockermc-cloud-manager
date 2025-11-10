@@ -1,6 +1,5 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,29 +22,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreateServer } from '@/hooks/mutations/useCreateServer';
-
-const createServerSchema = z.object({
-  name: z
-    .string()
-    .min(1, 'Name is required')
-    .max(100, 'Name must be less than 100 characters')
-    .regex(/^[a-zA-Z0-9-_]+$/, 'Name can only contain letters, numbers, hyphens, and underscores'),
-  max_players: z
-    .number()
-    .int()
-    .min(1, 'Minimum 1 player')
-    .max(1000, 'Maximum 1000 players')
-    .optional(),
-  motd: z
-    .string()
-    .max(255, 'MOTD must be less than 255 characters')
-    .optional(),
-  version: z
-    .string()
-    .optional(),
-});
-
-type CreateServerFormValues = z.infer<typeof createServerSchema>;
+import { createServerRequestSchema, type CreateServerRequest } from '@/schemas';
 
 interface CreateServerDialogProps {
   open: boolean;
@@ -55,8 +32,8 @@ interface CreateServerDialogProps {
 export function CreateServerDialog({ open, onOpenChange }: CreateServerDialogProps) {
   const createServer = useCreateServer();
 
-  const form = useForm<CreateServerFormValues>({
-    resolver: zodResolver(createServerSchema),
+  const form = useForm<CreateServerRequest>({
+    resolver: zodResolver(createServerRequestSchema),
     defaultValues: {
       name: '',
       max_players: 20,
@@ -65,7 +42,7 @@ export function CreateServerDialog({ open, onOpenChange }: CreateServerDialogPro
     },
   });
 
-  const onSubmit = async (data: CreateServerFormValues) => {
+  const onSubmit = async (data: CreateServerRequest) => {
     try {
       await createServer.mutateAsync(data);
       form.reset();

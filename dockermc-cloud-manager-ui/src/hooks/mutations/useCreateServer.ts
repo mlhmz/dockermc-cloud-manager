@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
 import { serversQueryKey } from '../queries/useServers';
-import type { CreateServerRequest } from '../../types/minecraft-server';
+import type { CreateServerRequest } from '@/schemas';
 
 export function useCreateServer() {
   const queryClient = useQueryClient();

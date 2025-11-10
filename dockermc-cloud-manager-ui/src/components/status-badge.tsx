@@ -1,4 +1,4 @@
-import type { ContainerStatus } from "@/types/api";
+import type { ContainerStatus } from "@/schemas";
 import { Badge } from "./ui/badge";
 
 function getStatusColor(status: ContainerStatus) {
