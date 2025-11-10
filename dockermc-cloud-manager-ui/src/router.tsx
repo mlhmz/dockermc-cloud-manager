@@ -1,8 +1,8 @@
 import { createBrowserRouter } from 'react-router-dom';
-import { RootLayout } from './layout';
-import { ServersPage } from './servers';
-import { ServerDetailPage } from './server-detail';
-import { ProxyPage } from './proxy';
+import { RootLayout } from './routes/layout';
+import { ServersPage } from './routes/servers';
+import { ServerDetailPage } from './routes/server-detail';
+import { ProxyPage } from './routes/proxy';
 
 export const router = createBrowserRouter([
   {
