@@ -25,19 +25,19 @@ graph TD
     API --> MC2[MC Server 2<br/>Docker Container]
     API --> MC3[MC Server 3<br/>Docker Container]
     API --> MCN[MC Server N<br/>Docker Container]
-    
+
     MC1 --> V1[Volume 1]
     MC2 --> V2[Volume 2]
     MC3 --> V3[Volume 3]
     MCN --> VN[Volume N]
-    
+
     MC1 --> Proxy[Velocity Proxy<br/>Docker Container]
     MC2 --> Proxy
     MC3 --> Proxy
     MCN --> Proxy
-    
+
     Proxy --> Players[Players]
-    
+
     style API fill:#4A90E2
     style Proxy fill:#E27D60
     style MC1 fill:#85DCB0
@@ -137,13 +137,14 @@ go build -o dockermc-cloud-manager
 
 ## Roadmap
 
-- [ ] Core Docker container orchestration
-- [ ] Volume management for server persistence
-- [ ] Velocity proxy integration
-- [ ] Docker network configuration
-- [ ] REST API implementation
-- [ ] Server lifecycle management (create, start, stop, delete)
+- [x] Core Docker container orchestration
+- [x] Volume management for server persistence
+- [x] Velocity proxy integration
+- [x] Docker network configuration
+- [x] REST API implementation
+- [x] Server lifecycle management (create, start, stop, delete)
 - [ ] Monitoring and logging
+  - [ ] Actual healthchecks in server instances and proxy instance
 - [ ] Configuration management
 
 ## Contributing

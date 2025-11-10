@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/mlhmz/dockermc-cloud-manager/internal/models"
 	"github.com/mlhmz/dockermc-cloud-manager/internal/service"
 )
 
@@ -35,6 +36,39 @@ func (h *ProxyHandler) GetProxy(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(proxy)
+}
+
+func (h *ProxyHandler) UpdateProxy(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var req models.UpdateProxyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.ErrorContext(ctx, "Failed to decode request", "error", err)
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	proxy, err := h.proxyService.EnsureProxyExists(ctx)
+	if err != nil {
+		h.logger.ErrorContext(ctx, "Failed to get proxy", "error", err)
+		http.Error(w, "Proxy not found", http.StatusNotFound)
+		return
+	}
+
+	if req.DefaultServerID != "" {
+		proxy.DefaultServerID = req.DefaultServerID
+	}
+
+	updatedProxy, err := h.proxyService.UpdateProxy(ctx, proxy)
+	if err != nil {
+		h.logger.ErrorContext(ctx, "Failed to update proxy", "error", err)
+		http.Error(w, "Failed to update proxy", http.StatusInternalServerError)
+		return
+	}
+
+	h.proxyService.RegenerateProxyConfig(ctx)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(updatedProxy)
 }
 
 // StartProxy starts the proxy

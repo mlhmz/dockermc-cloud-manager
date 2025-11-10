@@ -5,7 +5,7 @@ meta {
 }
 
 ws {
-  url: ws://localhost:8080/api/v1/servers/51116a3b-4d18-4a59-b509-ac6ad4cd7788/logs
+  url: ws://localhost:8080/api/v1/servers/3c88832c-8ac2-40d7-89ad-b38ce7b6b3f7/logs
   body: ws
   auth: none
 }
@@ -14,6 +14,6 @@ body:ws {
   name: message 1
   type: json
   content: '''
-    {}
+    {"type": "command", "command": "list"}
   '''
 }

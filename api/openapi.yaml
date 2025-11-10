@@ -338,6 +338,46 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+    patch:
+      tags:
+        - proxy
+      summary: Update proxy configuration
+      description: |
+        Updates the Velocity proxy configuration, including setting the default server.
+        The default server is the lobby server that players will join when they first connect to the proxy.
+      operationId: updateProxy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProxyRequest"
+      responses:
+        "200":
+          description: Proxy updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProxyServer"
+        "400":
+          description: Bad request - invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Proxy or server not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /api/v1/proxy/start:
     post:
       tags:
@@ -523,6 +563,18 @@ components:
           maxLength: 255
           example: "Updated MOTD"
 
+    UpdateProxyRequest:
+      type: object
+      properties:
+        default_server_id:
+          type: string
+          format: uuid
+          description: |
+            UUID of the server to set as the default lobby server.
+            Players will be sent to this server when they first connect to the proxy.
+            If not specified or empty, the proxy will use round-robin across all servers.
+          example: "550e8400-e29b-41d4-a716-446655440000"
+
     ProxyServer:
       type: object
       required:
@@ -551,6 +603,13 @@ components:
           type: string
           description: Docker volume ID
           example: "mc-proxy-main"
+        default_server_id:
+          type: string
+          format: uuid
+          description: |
+            UUID of the default lobby server. Players will be sent to this server when they first connect.
+            If empty, the proxy uses round-robin across all servers.
+          example: "550e8400-e29b-41d4-a716-446655440000"
         status:
           type: string
           enum:

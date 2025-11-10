@@ -38,6 +38,7 @@ func NewRouter(mcService *service.MinecraftServerService, proxyService *service.
 
 	// Proxy management endpoints
 	mux.HandleFunc("GET /api/v1/proxy", proxyHandler.GetProxy)
+	mux.HandleFunc("PATCH /api/v1/proxy", proxyHandler.UpdateProxy)
 	mux.HandleFunc("POST /api/v1/proxy/start", proxyHandler.StartProxy)
 	mux.HandleFunc("POST /api/v1/proxy/stop", proxyHandler.StopProxy)
 	mux.HandleFunc("POST /api/v1/proxy/regenerate-config", proxyHandler.RegenerateConfig)

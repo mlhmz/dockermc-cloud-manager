@@ -23,13 +23,18 @@ const (
 
 // ProxyServer represents the single Velocity proxy server instance
 type ProxyServer struct {
-	ID          string         `json:"id" gorm:"primaryKey"`
-	Name        string         `json:"name" gorm:"not null"`
-	ContainerID string         `json:"container_id" gorm:"index"`
-	VolumeID    string         `json:"volume_id"`
-	Status      ProxyStatus    `json:"status" gorm:"type:varchar(20)"`
-	Port        int            `json:"port" gorm:"not null"` // Public port (typically 25565)
-	CreatedAt   time.Time      `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt   time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
-	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
+	ID              string         `json:"id" gorm:"primaryKey"`
+	Name            string         `json:"name" gorm:"not null"`
+	ContainerID     string         `json:"container_id" gorm:"index"`
+	VolumeID        string         `json:"volume_id"`
+	DefaultServerID string         `json:"default_server_id"`
+	Status          ProxyStatus    `json:"status" gorm:"type:varchar(20)"`
+	Port            int            `json:"port" gorm:"not null"` // Public port (typically 25565)
+	CreatedAt       time.Time      `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt       time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
+	DeletedAt       gorm.DeletedAt `json:"-" gorm:"index"`
+}
+
+type UpdateProxyRequest struct {
+	DefaultServerID string `json:"default_server_id"`
 }
