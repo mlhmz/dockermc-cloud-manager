@@ -1,7 +1,6 @@
 import { Loader2, Play, Square, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useProxy } from '@/hooks/queries/useProxy';
@@ -11,21 +10,7 @@ import { useStopProxy } from '@/hooks/mutations/useStopProxy';
 import { useRegenerateProxyConfig } from '@/hooks/mutations/useRegenerateProxyConfig';
 import { useUpdateProxy } from '@/hooks/mutations/useUpdateProxy';
 import { useState } from 'react';
-
-function getStatusColor(status: string) {
-  switch (status) {
-    case 'running':
-      return 'bg-green-500';
-    case 'stopped':
-      return 'bg-gray-500';
-    case 'creating':
-      return 'bg-blue-500';
-    case 'error':
-      return 'bg-red-500';
-    default:
-      return 'bg-gray-500';
-  }
-}
+import { StatusBadge } from '@/components/status-badge';
 
 export function ProxyPage() {
   const { data: proxy, isLoading: proxyLoading, error: proxyError } = useProxy();
@@ -82,9 +67,7 @@ export function ProxyPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Velocity Proxy</h1>
-        <Badge className={getStatusColor(proxy.status)}>
-          {proxy.status}
-        </Badge>
+        <StatusBadge status={proxy.status}/>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

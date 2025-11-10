@@ -2,26 +2,11 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Loader2, Play, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { useServer } from '@/hooks/queries/useServer';
 import { useStartServer } from '@/hooks/mutations/useStartServer';
 import { useStopServer } from '@/hooks/mutations/useStopServer';
 import { ServerLogs } from '@/components/server-logs';
-
-function getStatusColor(status: string) {
-  switch (status) {
-    case 'running':
-      return 'bg-green-500';
-    case 'stopped':
-      return 'bg-gray-500';
-    case 'creating':
-      return 'bg-blue-500';
-    case 'error':
-      return 'bg-red-500';
-    default:
-      return 'bg-gray-500';
-  }
-}
+import { StatusBadge } from '@/components/status-badge';
 
 export function ServerDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -75,9 +60,7 @@ export function ServerDetailPage() {
             <p className="text-muted-foreground">{server.motd}</p>
           </div>
         </div>
-        <Badge className={getStatusColor(server.status)}>
-          {server.status}
-        </Badge>
+        <StatusBadge status={server.status} />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
