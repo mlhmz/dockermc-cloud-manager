@@ -75,3 +75,35 @@ func (s *DockerService) PullImage(ctx context.Context, imageName string) error {
 	s.logger.InfoContext(ctx, "Successfully pulled image", "image", imageName)
 	return nil
 }
+
+// ContainerState represents the state of a Docker container
+type ContainerState struct {
+	Exists      bool // Whether the container exists in Docker
+	Running     bool // Whether the container is running
+	Restarting  bool // Whether the container is restarting
+	Dead        bool // Whether the container is dead
+	OOMKilled   bool // Whether the container was killed due to OOM
+}
+
+// GetContainerState inspects a container and returns its current state
+func (s *DockerService) GetContainerState(ctx context.Context, containerID string) (*ContainerState, error) {
+	if containerID == "" {
+		return &ContainerState{Exists: false}, nil
+	}
+
+	// Inspect the container
+	containerJSON, err := s.client.ContainerInspect(ctx, containerID)
+	if err != nil {
+		// Container doesn't exist
+		return &ContainerState{Exists: false}, nil
+	}
+
+	// Container exists, extract state information
+	return &ContainerState{
+		Exists:     true,
+		Running:    containerJSON.State.Running,
+		Restarting: containerJSON.State.Restarting,
+		Dead:       containerJSON.State.Dead,
+		OOMKilled:  containerJSON.State.OOMKilled,
+	}, nil
+}

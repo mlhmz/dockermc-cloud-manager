@@ -314,14 +314,103 @@ PATCHEOF
 	return nil
 }
 
-// ListServers returns all servers
-func (s *MinecraftServerService) ListServers(ctx context.Context) ([]*models.MinecraftServer, error) {
-	return s.repo.FindAll()
+// syncServerState checks Docker container state and updates database if needed
+func (s *MinecraftServerService) syncServerState(ctx context.Context, server *models.MinecraftServer) error {
+	// Get container state from Docker
+	state, err := s.dockerService.GetContainerState(ctx, server.ContainerID)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to get container state during sync",
+			"server_id", server.ID,
+			"server_name", server.Name,
+			"error", err)
+		return fmt.Errorf("failed to get container state: %w", err)
+	}
+
+	// Determine the new status based on container state
+	var newStatus models.ServerStatus
+	if !state.Exists {
+		// Container doesn't exist anymore (deleted manually or crashed)
+		s.logger.WarnContext(ctx, "Container no longer exists in Docker, marking server as stopped",
+			"server_id", server.ID,
+			"server_name", server.Name,
+			"previous_status", server.Status,
+			"container_id", server.ContainerID)
+		newStatus = models.StatusStopped
+		server.ContainerID = "" // Clear the container ID
+	} else if state.Running {
+		newStatus = models.StatusRunning
+	} else if state.Restarting {
+		newStatus = models.StatusCreating
+	} else if state.Dead || state.OOMKilled {
+		newStatus = models.StatusError
+	} else {
+		// Stopped, paused, or exited
+		newStatus = models.StatusStopped
+	}
+
+	// Update database if status changed
+	if newStatus != server.Status {
+		s.logger.InfoContext(ctx, "Server status changed, updating database",
+			"server_id", server.ID,
+			"server_name", server.Name,
+			"previous_status", server.Status,
+			"new_status", newStatus)
+		server.Status = newStatus
+		if err := s.repo.Update(server); err != nil {
+			s.logger.ErrorContext(ctx, "Failed to update server status in database",
+				"server_id", server.ID,
+				"server_name", server.Name,
+				"error", err)
+			return err
+		}
+	}
+
+	return nil
 }
 
-// GetServer returns a specific server by ID
+// ListServers returns all servers with synced state
+func (s *MinecraftServerService) ListServers(ctx context.Context) ([]*models.MinecraftServer, error) {
+	servers, err := s.repo.FindAll()
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to retrieve servers from database", "error", err)
+		return nil, err
+	}
+
+	s.logger.DebugContext(ctx, "Syncing state for all servers", "count", len(servers))
+
+	// Sync state for each server
+	for _, server := range servers {
+		if err := s.syncServerState(ctx, server); err != nil {
+			// Log error but continue with other servers
+			// The server will still be returned with its last known state
+			s.logger.WarnContext(ctx, "Failed to sync server state, returning last known state",
+				"server_id", server.ID,
+				"server_name", server.Name,
+				"error", err)
+		}
+	}
+
+	return servers, nil
+}
+
+// GetServer returns a specific server by ID with synced state
 func (s *MinecraftServerService) GetServer(ctx context.Context, id string) (*models.MinecraftServer, error) {
-	return s.repo.FindByID(id)
+	server, err := s.repo.FindByID(id)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to retrieve server from database", "server_id", id, "error", err)
+		return nil, err
+	}
+
+	// Sync state before returning
+	if err := s.syncServerState(ctx, server); err != nil {
+		// Return server with last known state if sync fails
+		s.logger.WarnContext(ctx, "Failed to sync server state, returning last known state",
+			"server_id", server.ID,
+			"server_name", server.Name,
+			"error", err)
+	}
+
+	return server, nil
 }
 
 // StartServer starts a Minecraft server

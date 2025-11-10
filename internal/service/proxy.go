@@ -271,9 +271,73 @@ func (s *ProxyService) StopProxy(ctx context.Context) error {
 	return nil
 }
 
-// GetProxy retrieves the proxy
+// syncProxyState checks Docker container state and updates database if needed
+func (s *ProxyService) syncProxyState(ctx context.Context, proxy *models.ProxyServer) error {
+	// Get container state from Docker
+	state, err := s.dockerService.GetContainerState(ctx, proxy.ContainerID)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to get container state during sync",
+			"proxy_id", proxy.ID,
+			"error", err)
+		return fmt.Errorf("failed to get container state: %w", err)
+	}
+
+	// Determine the new status based on container state
+	var newStatus models.ProxyStatus
+	if !state.Exists {
+		// Container doesn't exist anymore (deleted manually or crashed)
+		s.logger.WarnContext(ctx, "Proxy container no longer exists in Docker, marking as stopped",
+			"proxy_id", proxy.ID,
+			"previous_status", proxy.Status,
+			"container_id", proxy.ContainerID)
+		newStatus = models.ProxyStatusStopped
+		proxy.ContainerID = "" // Clear the container ID
+	} else if state.Running {
+		newStatus = models.ProxyStatusRunning
+	} else if state.Restarting {
+		newStatus = models.ProxyStatusCreating
+	} else if state.Dead || state.OOMKilled {
+		newStatus = models.ProxyStatusError
+	} else {
+		// Stopped, paused, or exited
+		newStatus = models.ProxyStatusStopped
+	}
+
+	// Update database if status changed
+	if newStatus != proxy.Status {
+		s.logger.InfoContext(ctx, "Proxy status changed, updating database",
+			"proxy_id", proxy.ID,
+			"previous_status", proxy.Status,
+			"new_status", newStatus)
+		proxy.Status = newStatus
+		if err := s.proxyRepo.Update(proxy); err != nil {
+			s.logger.ErrorContext(ctx, "Failed to update proxy status in database",
+				"proxy_id", proxy.ID,
+				"error", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+// GetProxy retrieves the proxy with synced state
 func (s *ProxyService) GetProxy(ctx context.Context) (*models.ProxyServer, error) {
-	return s.proxyRepo.FindByID(models.SingleProxyID)
+	proxy, err := s.proxyRepo.FindByID(models.SingleProxyID)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to retrieve proxy from database", "error", err)
+		return nil, err
+	}
+
+	// Sync state before returning
+	if err := s.syncProxyState(ctx, proxy); err != nil {
+		// Return proxy with last known state if sync fails
+		s.logger.WarnContext(ctx, "Failed to sync proxy state, returning last known state",
+			"proxy_id", proxy.ID,
+			"error", err)
+	}
+
+	return proxy, nil
 }
 
 // ConnectServerToProxy connects a server to the minecraft network so proxy can reach it
