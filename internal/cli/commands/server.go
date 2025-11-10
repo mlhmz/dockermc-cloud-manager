@@ -35,7 +35,7 @@ func initializeServices() (*database.DB, *service.DockerService, *service.Minecr
 	serverRepo := database.NewServerRepository(db)
 
 	// Initialize Minecraft server service
-	mcService := service.NewMinecraftServerService(dockerService, serverRepo)
+	mcService := service.NewMinecraftServerService(dockerService, serverRepo, logger)
 
 	// Cleanup function
 	cleanup := func() {

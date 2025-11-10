@@ -71,8 +71,8 @@ If no port is specified, it uses the API_PORT environment variable or defaults t
 		proxyRepo := database.NewProxyRepository(db)
 
 		// Initialize services
-		mcService := service.NewMinecraftServerService(dockerService, serverRepo)
-		proxyService := service.NewProxyService(dockerService, proxyRepo, serverRepo)
+		mcService := service.NewMinecraftServerService(dockerService, serverRepo, logger)
+		proxyService := service.NewProxyService(dockerService, proxyRepo, serverRepo, logger)
 
 		// Set proxy service in mcService to enable auto-linking
 		mcService.SetProxyService(proxyService)

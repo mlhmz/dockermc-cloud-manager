@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/volume"
@@ -17,13 +18,15 @@ type MinecraftServerService struct {
 	dockerService *DockerService
 	repo          *database.ServerRepository
 	proxyService  *ProxyService
+	logger        *slog.Logger
 }
 
 // NewMinecraftServerService creates a new Minecraft server service
-func NewMinecraftServerService(dockerService *DockerService, repo *database.ServerRepository) *MinecraftServerService {
+func NewMinecraftServerService(dockerService *DockerService, repo *database.ServerRepository, logger *slog.Logger) *MinecraftServerService {
 	return &MinecraftServerService{
 		dockerService: dockerService,
 		repo:          repo,
+		logger:        logger,
 	}
 }
 
@@ -37,6 +40,12 @@ func (s *MinecraftServerService) CreateServer(ctx context.Context, req *models.C
 	// Generate unique ID
 	serverID := uuid.New().String()
 
+	s.logger.InfoContext(ctx, "Creating new Minecraft server",
+		"server_id", serverID,
+		"server_name", req.Name,
+		"max_players", req.MaxPlayers,
+		"version", req.Version)
+
 	// Create volume for persistent storage
 	volumeName := fmt.Sprintf("mc-server-%s", serverID)
 	vol, err := s.dockerService.client.VolumeCreate(ctx, volume.CreateOptions{
@@ -46,8 +55,17 @@ func (s *MinecraftServerService) CreateServer(ctx context.Context, req *models.C
 		},
 	})
 	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to create Docker volume",
+			"server_id", serverID,
+			"server_name", req.Name,
+			"volume_name", volumeName,
+			"error", err)
 		return nil, fmt.Errorf("failed to create volume: %w", err)
 	}
+
+	s.logger.DebugContext(ctx, "Created Docker volume",
+		"server_id", serverID,
+		"volume_name", volumeName)
 
 	// Set defaults
 	maxPlayers := req.MaxPlayers
@@ -70,6 +88,11 @@ func (s *MinecraftServerService) CreateServer(ctx context.Context, req *models.C
 	if err := s.dockerService.PullImage(ctx, imageName); err != nil {
 		// Cleanup volume on failure
 		s.dockerService.client.VolumeRemove(ctx, vol.Name, true)
+		s.logger.ErrorContext(ctx, "Failed to pull Docker image",
+			"server_id", serverID,
+			"server_name", req.Name,
+			"image", imageName,
+			"error", err)
 		return nil, fmt.Errorf("failed to pull image: %w", err)
 	}
 
@@ -78,6 +101,8 @@ func (s *MinecraftServerService) CreateServer(ctx context.Context, req *models.C
 	if s.proxyService != nil {
 		if _, err := s.proxyService.EnsureProxyExists(ctx); err == nil {
 			hasProxy = true
+			s.logger.InfoContext(ctx, "Configuring server for proxy mode",
+				"server_id", serverID)
 		}
 	}
 
@@ -117,6 +142,10 @@ func (s *MinecraftServerService) CreateServer(ctx context.Context, req *models.C
 	}
 
 	// Create container
+	s.logger.DebugContext(ctx, "Creating Docker container",
+		"server_id", serverID,
+		"container_name", fmt.Sprintf("mc-server-%s", serverID))
+
 	resp, err := s.dockerService.client.ContainerCreate(
 		ctx,
 		containerConfig,
@@ -128,8 +157,16 @@ func (s *MinecraftServerService) CreateServer(ctx context.Context, req *models.C
 	if err != nil {
 		// Cleanup volume on failure
 		s.dockerService.client.VolumeRemove(ctx, vol.Name, true)
+		s.logger.ErrorContext(ctx, "Failed to create Docker container",
+			"server_id", serverID,
+			"server_name", req.Name,
+			"error", err)
 		return nil, fmt.Errorf("failed to create container: %w", err)
 	}
+
+	s.logger.DebugContext(ctx, "Created Docker container",
+		"server_id", serverID,
+		"container_id", resp.ID)
 
 	// Create server model
 	server := &models.MinecraftServer{
@@ -145,19 +182,33 @@ func (s *MinecraftServerService) CreateServer(ctx context.Context, req *models.C
 	// If configured for proxy, create the patch file in the volume BEFORE saving to database
 	// This needs to happen before the container starts
 	if hasProxy {
+		s.logger.DebugContext(ctx, "Creating BungeeCord patch file for proxy compatibility",
+			"server_id", serverID)
+
 		if err := s.createBungeeCordPatchFileInVolume(ctx, vol.Name); err != nil {
 			// Cleanup on failure
 			s.dockerService.client.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
 			s.dockerService.client.VolumeRemove(ctx, vol.Name, true)
+			s.logger.ErrorContext(ctx, "Failed to create BungeeCord patch file",
+				"server_id", serverID,
+				"error", err)
 			return nil, fmt.Errorf("failed to create patch file: %w", err)
 		}
 	}
 
 	// Save to database
+	s.logger.DebugContext(ctx, "Saving server to database",
+		"server_id", serverID,
+		"server_name", req.Name)
+
 	if err := s.repo.Create(server); err != nil {
 		// Cleanup container and volume on failure
 		s.dockerService.client.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
 		s.dockerService.client.VolumeRemove(ctx, vol.Name, true)
+		s.logger.ErrorContext(ctx, "Failed to save server to database",
+			"server_id", serverID,
+			"server_name", req.Name,
+			"error", err)
 		return nil, fmt.Errorf("failed to save server to database: %w", err)
 	}
 
@@ -167,16 +218,34 @@ func (s *MinecraftServerService) CreateServer(ctx context.Context, req *models.C
 		if _, err := s.proxyService.EnsureProxyExists(ctx); err != nil {
 			// Log error but don't fail server creation
 			// Server can still function standalone
+			s.logger.WarnContext(ctx, "Failed to connect server to proxy",
+				"server_id", serverID,
+				"error", err)
 		} else {
 			// Connect server to proxy network
 			if err := s.proxyService.ConnectServerToProxy(ctx, server); err != nil {
 				// Log error but don't fail server creation
+				s.logger.WarnContext(ctx, "Failed to connect server to proxy network",
+					"server_id", serverID,
+					"error", err)
 			} else {
+				s.logger.InfoContext(ctx, "Connected server to proxy network",
+					"server_id", serverID)
+
 				// Regenerate proxy config to include new server
-				s.proxyService.RegenerateProxyConfig(ctx)
+				if err := s.proxyService.RegenerateProxyConfig(ctx); err != nil {
+					s.logger.WarnContext(ctx, "Failed to regenerate proxy config",
+						"server_id", serverID,
+						"error", err)
+				}
 			}
 		}
 	}
+
+	s.logger.InfoContext(ctx, "Server created successfully",
+		"server_id", serverID,
+		"server_name", req.Name,
+		"container_id", resp.ID)
 
 	return server, nil
 }

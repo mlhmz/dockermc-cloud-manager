@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
@@ -25,6 +26,7 @@ type ProxyService struct {
 	dockerService *DockerService
 	proxyRepo     *database.ProxyRepository
 	serverRepo    *database.ServerRepository
+	logger        *slog.Logger
 }
 
 // NewProxyService creates a new proxy service
@@ -32,39 +34,53 @@ func NewProxyService(
 	dockerService *DockerService,
 	proxyRepo *database.ProxyRepository,
 	serverRepo *database.ServerRepository,
+	logger *slog.Logger,
 ) *ProxyService {
 	return &ProxyService{
 		dockerService: dockerService,
 		proxyRepo:     proxyRepo,
 		serverRepo:    serverRepo,
+		logger:        logger,
 	}
 }
 
 // EnsureProxyExists creates the proxy if it doesn't exist
 func (s *ProxyService) EnsureProxyExists(ctx context.Context) (*models.ProxyServer, error) {
+	s.logger.DebugContext(ctx, "Checking if proxy exists")
+
 	// Check if proxy already exists
 	proxy, err := s.proxyRepo.FindByID(models.SingleProxyID)
 	if err == nil {
+		s.logger.InfoContext(ctx, "Proxy already exists", "proxy_id", proxy.ID)
 		return proxy, nil // Proxy exists
 	}
 
+	s.logger.InfoContext(ctx, "Proxy does not exist, creating new proxy")
 	// Create the proxy
 	return s.createProxy(ctx)
 }
 
 func (s *ProxyService) UpdateProxy(ctx context.Context, proxy *models.ProxyServer) (*models.ProxyServer, error) {
+	s.logger.InfoContext(ctx, "Updating proxy configuration", "proxy_id", proxy.ID)
+
 	// Update the proxy configuration
 	if err := s.proxyRepo.Update(proxy); err != nil {
+		s.logger.ErrorContext(ctx, "Failed to update proxy", "proxy_id", proxy.ID, "error", err)
 		return nil, err
 	}
 
+	s.logger.DebugContext(ctx, "Proxy updated successfully", "proxy_id", proxy.ID)
 	return proxy, nil
 }
 
 // createProxy creates the single Velocity proxy server
 func (s *ProxyService) createProxy(ctx context.Context) (*models.ProxyServer, error) {
+	s.logger.InfoContext(ctx, "Creating proxy server")
+
 	// Create volume for proxy configuration
 	volumeName := "mc-proxy-main"
+	s.logger.DebugContext(ctx, "Creating volume for proxy", "volume_name", volumeName)
+
 	vol, err := s.dockerService.client.VolumeCreate(ctx, volume.CreateOptions{
 		Name: volumeName,
 		Labels: map[string]string{
@@ -72,18 +88,25 @@ func (s *ProxyService) createProxy(ctx context.Context) (*models.ProxyServer, er
 		},
 	})
 	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to create proxy volume", "volume_name", volumeName, "error", err)
 		return nil, fmt.Errorf("failed to create volume: %w", err)
 	}
 
+	s.logger.DebugContext(ctx, "Volume created successfully", "volume_name", vol.Name)
+
 	// Pull the Velocity image
+	s.logger.InfoContext(ctx, "Pulling Velocity image", "image", VelocityImage)
 	if err := s.dockerService.PullImage(ctx, VelocityImage); err != nil {
 		s.dockerService.client.VolumeRemove(ctx, vol.Name, true)
+		s.logger.ErrorContext(ctx, "Failed to pull Velocity image", "image", VelocityImage, "error", err)
 		return nil, fmt.Errorf("failed to pull image: %w", err)
 	}
 
 	// Ensure minecraft network exists
+	s.logger.DebugContext(ctx, "Ensuring minecraft network exists", "network", MinecraftNetworkName)
 	if err := s.ensureNetwork(ctx, MinecraftNetworkName); err != nil {
 		s.dockerService.client.VolumeRemove(ctx, vol.Name, true)
+		s.logger.ErrorContext(ctx, "Failed to ensure network", "network", MinecraftNetworkName, "error", err)
 		return nil, fmt.Errorf("failed to ensure network: %w", err)
 	}
 
@@ -125,6 +148,7 @@ func (s *ProxyService) createProxy(ctx context.Context) (*models.ProxyServer, er
 	}
 
 	// Create container
+	s.logger.InfoContext(ctx, "Creating proxy container", "container_name", "mc-proxy-main")
 	resp, err := s.dockerService.client.ContainerCreate(
 		ctx,
 		containerConfig,
@@ -135,8 +159,11 @@ func (s *ProxyService) createProxy(ctx context.Context) (*models.ProxyServer, er
 	)
 	if err != nil {
 		s.dockerService.client.VolumeRemove(ctx, vol.Name, true)
+		s.logger.ErrorContext(ctx, "Failed to create proxy container", "error", err)
 		return nil, fmt.Errorf("failed to create container: %w", err)
 	}
+
+	s.logger.DebugContext(ctx, "Container created successfully", "container_id", resp.ID)
 
 	// Create proxy model
 	proxy := &models.ProxyServer{
@@ -149,17 +176,22 @@ func (s *ProxyService) createProxy(ctx context.Context) (*models.ProxyServer, er
 	}
 
 	// Save to database
+	s.logger.DebugContext(ctx, "Saving proxy to database", "proxy_id", proxy.ID)
 	if err := s.proxyRepo.Create(proxy); err != nil {
 		s.dockerService.client.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
 		s.dockerService.client.VolumeRemove(ctx, vol.Name, true)
+		s.logger.ErrorContext(ctx, "Failed to save proxy to database", "proxy_id", proxy.ID, "error", err)
 		return nil, fmt.Errorf("failed to save proxy to database: %w", err)
 	}
 
 	// Start the proxy
+	s.logger.InfoContext(ctx, "Starting proxy server", "proxy_id", proxy.ID)
 	if err := s.StartProxy(ctx); err != nil {
+		s.logger.ErrorContext(ctx, "Failed to start proxy", "proxy_id", proxy.ID, "error", err)
 		return nil, fmt.Errorf("failed to start proxy: %w", err)
 	}
 
+	s.logger.InfoContext(ctx, "Proxy server created successfully", "proxy_id", proxy.ID, "container_id", resp.ID)
 	return proxy, nil
 }
 
@@ -190,33 +222,53 @@ func (s *ProxyService) ensureNetwork(ctx context.Context, networkName string) er
 func (s *ProxyService) StartProxy(ctx context.Context) error {
 	proxy, err := s.proxyRepo.FindByID(models.SingleProxyID)
 	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to find proxy", "error", err)
 		return err
 	}
 
+	s.logger.InfoContext(ctx, "Starting proxy container", "proxy_id", proxy.ID, "container_id", proxy.ContainerID)
+
 	if err := s.dockerService.client.ContainerStart(ctx, proxy.ContainerID, container.StartOptions{}); err != nil {
+		s.logger.ErrorContext(ctx, "Failed to start proxy container", "proxy_id", proxy.ID, "container_id", proxy.ContainerID, "error", err)
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 
 	proxy.Status = models.ProxyStatusRunning
-	return s.proxyRepo.Update(proxy)
+	if err := s.proxyRepo.Update(proxy); err != nil {
+		s.logger.ErrorContext(ctx, "Failed to update proxy status", "proxy_id", proxy.ID, "error", err)
+		return err
+	}
+
+	s.logger.InfoContext(ctx, "Proxy started successfully", "proxy_id", proxy.ID)
+	return nil
 }
 
 // StopProxy stops the proxy server
 func (s *ProxyService) StopProxy(ctx context.Context) error {
 	proxy, err := s.proxyRepo.FindByID(models.SingleProxyID)
 	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to find proxy", "error", err)
 		return err
 	}
+
+	s.logger.InfoContext(ctx, "Stopping proxy container", "proxy_id", proxy.ID, "container_id", proxy.ContainerID)
 
 	timeout := 30
 	if err := s.dockerService.client.ContainerStop(ctx, proxy.ContainerID, container.StopOptions{
 		Timeout: &timeout,
 	}); err != nil {
+		s.logger.ErrorContext(ctx, "Failed to stop proxy container", "proxy_id", proxy.ID, "container_id", proxy.ContainerID, "error", err)
 		return fmt.Errorf("failed to stop container: %w", err)
 	}
 
 	proxy.Status = models.ProxyStatusStopped
-	return s.proxyRepo.Update(proxy)
+	if err := s.proxyRepo.Update(proxy); err != nil {
+		s.logger.ErrorContext(ctx, "Failed to update proxy status", "proxy_id", proxy.ID, "error", err)
+		return err
+	}
+
+	s.logger.InfoContext(ctx, "Proxy stopped successfully", "proxy_id", proxy.ID)
+	return nil
 }
 
 // GetProxy retrieves the proxy
@@ -226,27 +278,39 @@ func (s *ProxyService) GetProxy(ctx context.Context) (*models.ProxyServer, error
 
 // ConnectServerToProxy connects a server to the minecraft network so proxy can reach it
 func (s *ProxyService) ConnectServerToProxy(ctx context.Context, server *models.MinecraftServer) error {
+	s.logger.InfoContext(ctx, "Connecting server to proxy network", "server_id", server.ID, "server_name", server.Name)
+
 	// Ensure network exists
 	if err := s.ensureNetwork(ctx, MinecraftNetworkName); err != nil {
+		s.logger.ErrorContext(ctx, "Failed to ensure network exists", "server_id", server.ID, "error", err)
 		return err
 	}
 
 	// Check if already connected
 	containerInfo, err := s.dockerService.client.ContainerInspect(ctx, server.ContainerID)
 	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to inspect server container", "server_id", server.ID, "container_id", server.ContainerID, "error", err)
 		return err
 	}
 
 	for netName := range containerInfo.NetworkSettings.Networks {
 		if netName == MinecraftNetworkName {
+			s.logger.DebugContext(ctx, "Server already connected to network", "server_id", server.ID, "network", MinecraftNetworkName)
 			return nil // Already connected
 		}
 	}
 
 	// Connect to network with server name as alias
-	return s.dockerService.client.NetworkConnect(ctx, MinecraftNetworkName, server.ContainerID, &network.EndpointSettings{
+	s.logger.InfoContext(ctx, "Connecting server to network", "server_id", server.ID, "server_name", server.Name, "network", MinecraftNetworkName)
+	if err := s.dockerService.client.NetworkConnect(ctx, MinecraftNetworkName, server.ContainerID, &network.EndpointSettings{
 		Aliases: []string{server.Name},
-	})
+	}); err != nil {
+		s.logger.ErrorContext(ctx, "Failed to connect server to network", "server_id", server.ID, "network", MinecraftNetworkName, "error", err)
+		return err
+	}
+
+	s.logger.InfoContext(ctx, "Server connected to network successfully", "server_id", server.ID, "network", MinecraftNetworkName)
+	return nil
 }
 
 // RegenerateProxyConfig regenerates the Velocity configuration based on all servers
