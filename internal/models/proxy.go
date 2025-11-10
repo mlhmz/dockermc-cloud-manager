@@ -2,8 +2,6 @@ package models
 
 import (
 	"time"
-
-	"gorm.io/gorm"
 )
 
 const (
@@ -22,7 +20,6 @@ type ProxyServer struct {
 	Port            int             `json:"port" gorm:"not null"` // Public port (typically 25565)
 	CreatedAt       time.Time       `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt       time.Time       `json:"updated_at" gorm:"autoUpdateTime"`
-	DeletedAt       gorm.DeletedAt  `json:"-" gorm:"index"`
 }
 
 type UpdateProxyRequest struct {

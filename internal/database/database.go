@@ -136,9 +136,9 @@ func (r *ServerRepository) Update(server *models.MinecraftServer) error {
 	return nil
 }
 
-// Delete removes a server from the database (soft delete)
+// Delete removes a server from the database
 func (r *ServerRepository) Delete(id string) error {
-	result := r.db.Delete(&models.MinecraftServer{}, "id = ?", id)
+	result := r.db.Unscoped().Delete(&models.MinecraftServer{}, "id = ?", id)
 	if result.Error != nil {
 		r.logger.Error("Failed to delete server", "id", id, "error", result.Error)
 		return result.Error
@@ -147,19 +147,5 @@ func (r *ServerRepository) Delete(id string) error {
 		return fmt.Errorf("server not found")
 	}
 	r.logger.Debug("Server deleted from database", "id", id)
-	return nil
-}
-
-// HardDelete permanently removes a server from the database
-func (r *ServerRepository) HardDelete(id string) error {
-	result := r.db.Unscoped().Delete(&models.MinecraftServer{}, "id = ?", id)
-	if result.Error != nil {
-		r.logger.Error("Failed to hard delete server", "id", id, "error", result.Error)
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("server not found")
-	}
-	r.logger.Debug("Server permanently deleted from database", "id", id)
 	return nil
 }

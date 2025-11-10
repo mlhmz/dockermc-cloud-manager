@@ -50,7 +50,7 @@ func (s *ProxyService) EnsureProxyExists(ctx context.Context) (*models.ProxyServ
 
 	// Check if proxy already exists
 	proxy, err := s.proxyRepo.FindByID(models.SingleProxyID)
-	if err == nil {
+	if err == nil && proxy.ContainerID != "" {
 		s.logger.InfoContext(ctx, "Proxy already exists", "proxy_id", proxy.ID)
 		return proxy, nil // Proxy exists
 	}
@@ -290,6 +290,7 @@ func (s *ProxyService) syncProxyState(ctx context.Context, proxy *models.ProxySe
 			"proxy_id", proxy.ID,
 			"previous_status", proxy.Status,
 			"container_id", proxy.ContainerID)
+		s.proxyRepo.Delete(proxy.ID)
 		newStatus = models.StatusStopped
 		proxy.ContainerID = "" // Clear the container ID
 	} else if state.Running {

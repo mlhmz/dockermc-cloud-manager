@@ -11,7 +11,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 class ApiClient {
   private async fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
+    const response = await fetch(path, {
       ...options,
       headers: {
         'Content-Type': 'application/json',

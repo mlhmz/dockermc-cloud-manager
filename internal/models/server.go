@@ -2,8 +2,6 @@ package models
 
 import (
 	"time"
-
-	"gorm.io/gorm"
 )
 
 // MinecraftServer represents a Minecraft server instance
@@ -18,7 +16,6 @@ type MinecraftServer struct {
 	MOTD        string          `json:"motd"`
 	CreatedAt   time.Time       `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt   time.Time       `json:"updated_at" gorm:"autoUpdateTime"`
-	DeletedAt   gorm.DeletedAt  `json:"-" gorm:"index"`
 }
 
 // CreateServerRequest represents the request body for creating a new server

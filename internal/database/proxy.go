@@ -83,9 +83,9 @@ func (r *ProxyRepository) Update(proxy *models.ProxyServer) error {
 	return nil
 }
 
-// Delete removes a proxy from the database (soft delete)
+// Delete removes a proxy from the database
 func (r *ProxyRepository) Delete(id string) error {
-	result := r.db.Delete(&models.ProxyServer{}, "id = ?", id)
+	result := r.db.Unscoped().Delete(&models.ProxyServer{}, "id = ?", id)
 	if result.Error != nil {
 		r.logger.Error("Failed to delete proxy", "id", id, "error", result.Error)
 		return result.Error
